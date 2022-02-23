@@ -11,6 +11,8 @@
 #ifndef LLVM_FUZZER_TRACE_PC
 #define LLVM_FUZZER_TRACE_PC
 
+#include <link.h>
+
 #include "FuzzerDefs.h"
 #include "FuzzerDictionary.h"
 #include "FuzzerValueBitMap.h"
@@ -73,6 +75,7 @@ class TracePC {
   void HandlePCsInit(const uintptr_t *Start, const uintptr_t *Stop);
   void HandleCallerCallee(uintptr_t Caller, uintptr_t Callee);
   template <class T> void HandleCmp(uintptr_t PC, T Arg1, T Arg2);
+  void HandleDf(uintptr_t PC, uintptr_t Addr, uintptr_t MaxPC);
   size_t GetTotalPCCoverage();
   void SetUseCounters(bool UC) { UseCounters = UC; }
   void SetUseValueProfileMask(uint32_t VPMask) { UseValueProfileMask = VPMask; }
@@ -83,6 +86,7 @@ class TracePC {
 
   void ResetMaps() {
     ValueProfileMap.Reset();
+    DataFlowMap.Reset();
     ClearExtraCounters();
     ClearInlineCounters();
   }
@@ -127,6 +131,7 @@ class TracePC {
   const PCTableEntry *PCTableEntryByIdx(uintptr_t Idx);
   static uintptr_t GetNextInstructionPc(uintptr_t PC);
   bool PcIsFuncEntry(const PCTableEntry *TE) { return TE->PCFlags & 1; }
+  void InitializeMainObjectInformation();
 
 private:
   bool UseCounters = false;
@@ -175,6 +180,7 @@ private:
   uint8_t *FocusFunctionCounterPtr = nullptr;
 
   ValueBitMap ValueProfileMap;
+  ValueBitMap DataFlowMap;  // For tracing dataflow, i.e. stores and loads
   uintptr_t InitialStack;
 };
 
@@ -286,6 +292,15 @@ TracePC::CollectFeatures(Callback HandleFeature) const {
     HandleFeature(static_cast<uint32_t>(
         FirstFeature + StackDepthStepFunction(MaxStackOffset / 8)));
     FirstFeature += StackDepthStepFunction(std::numeric_limits<size_t>::max());
+  }
+
+  // Data Flow feature
+  //TODO: Need a flag for using DataFlowMap?
+  if (UseValueProfileMask) {
+    DataFlowMap.ForEach([&](size_t Idx) {
+      HandleFeature(static_cast<uint32_t>(FirstFeature + Idx));
+    });
+    FirstFeature += DataFlowMap.SizeInBits();
   }
 
   return FirstFeature;

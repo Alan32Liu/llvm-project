@@ -10,6 +10,7 @@
 
 #include "FuzzerDefs.h"
 #include "FuzzerPlatform.h"
+#include "FuzzerTracePC.h"
 
 extern "C" {
 // This function should be defined by the user.
@@ -17,5 +18,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size);
 }  // extern "C"
 
 ATTRIBUTE_INTERFACE int main(int argc, char **argv) {
+  fuzzer::TPC.InitializeMainObjectInformation();
   return fuzzer::FuzzerDriver(&argc, &argv, LLVMFuzzerTestOneInput);
 }
