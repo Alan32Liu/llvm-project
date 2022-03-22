@@ -403,9 +403,7 @@ void TracePC::HandleCmp(uintptr_t PC, T Arg1, T Arg2) {
 ATTRIBUTE_TARGET_POPCNT ALWAYS_INLINE
 ATTRIBUTE_NO_SANITIZE_ALL
 void TracePC::HandleDf(uintptr_t PC, uintptr_t Addr, uintptr_t MaxPC) {
-//fuzzer::Printf("[HandleDf] Instrumented : %lu\n", Addr);
   uintptr_t feature = PC * MaxPC + Addr;
-//  fuzzer::Printf("[HandleDf] Feature value: %lu\n", feature);
   DataFlowMap.AddValue(feature);
 }
 
@@ -642,14 +640,6 @@ void TraceLoad(void *Addr) {
 
   uintptr_t PCOffset = PC - main_object_start_address;
   uintptr_t LoadOffset = LoadAddr - main_object_start_address;
-//
-//  fuzzer::Printf("[TraceLoad] PC                       : %lu\n", PCOffset);
-//  fuzzer::Printf("[TraceLoad] LoadAddr                 : %lu\n", LoadAddr);
-//  fuzzer::Printf("[TraceLoad] main_object_start_address: %lu\n",
-//    main_object_start_address);
-//  fuzzer::Printf("[TraceLoad] PCOffset                 : %lu\n", PCOffset);
-//  fuzzer::Printf("[TraceLoad] LoadOffset               : %lu\n", LoadOffset);
-//  fuzzer::Printf("[TraceLoad] main_object_size         : %lu\n", main_object_size);
 
   if (PCOffset >= main_object_size) return;
   if (LoadOffset >= main_object_size) return;
@@ -670,14 +660,6 @@ void TraceStore(void *Addr) {
   uintptr_t StoreAddr = reinterpret_cast<uintptr_t>(Addr);
   uintptr_t PCOffset = PC - main_object_start_address;
   uintptr_t StoreOffset = StoreAddr - main_object_start_address;
-//
-//  fuzzer::Printf("[TraceStore] PC                       : %lu\n", PCOffset);
-//  fuzzer::Printf("[TraceStore] StoreAddr                : %lu\n", StoreAddr);
-//  fuzzer::Printf("[TraceStore] main_object_start_address: %lu\n",
-//    main_object_start_address);
-//  fuzzer::Printf("[TraceStore] PCOffset                 : %lu\n", PCOffset);
-//  fuzzer::Printf("[TraceStore] StoreOffset              : %lu\n", StoreOffset);
-//  fuzzer::Printf("[TraceStore] main_object_size         : %lu\n", main_object_size);
 
   if (PCOffset >= main_object_size) return;
   if (StoreOffset >= main_object_size) return;
@@ -763,27 +745,12 @@ void __sanitizer_weak_hook_memmem(void *called_pc, const void *s1, size_t len1,
 // The code assumes that the main binary is the the first one to be iterated on.
 int dl_iterate_phdr_callback(struct dl_phdr_info *info, size_t size,
                                     void *data) {
-//  PrintErrorAndExitIf(main_object_start_address != kInvalidStartAddress,
-//                      "main_object_start_address is already set");
-//  fuzzer::Printf("[INIT] main_object_start_address: %lu\n", main_object_start_address);
-//  fuzzer::Printf("[INIT] main_object_size         : %lu\n", main_object_size);
   main_object_start_address = info->dlpi_addr;
-//  fuzzer::Printf("[UPDT] main_object_start_address: %lu\n", main_object_start_address);
   for (int j = 0; j < info->dlpi_phnum; j++) {
     uintptr_t end_offset =
         info->dlpi_phdr[j].p_vaddr + info->dlpi_phdr[j].p_memsz;
     if (main_object_size < end_offset) main_object_size = end_offset;
-//    fuzzer::Printf("[UPDT] main_object_size         : %lu\n", main_object_size);
   }
-//  fuzzer::Printf("[FINL] main_object_start_address: %lu\n", main_object_start_address);
-//  fuzzer::Printf("[FINL] main_object_size         : %lu\n", main_object_size);
-//  uintptr_t some_code_address =
-//      reinterpret_cast<uintptr_t>(&dl_iterate_phdr_callback);
-//  PrintErrorAndExitIf(main_object_start_address > some_code_address,
-//                      "main_object_start_address is above the code");
-//  PrintErrorAndExitIf(
-//      main_object_start_address + main_object_size < some_code_address,
-//      "main_object_start_address + main_object_size is below the code");
   return 1;  // we need only the first header, so return 1.
 }
 

@@ -295,7 +295,6 @@ TracePC::CollectFeatures(Callback HandleFeature) const {
   }
 
   // Data Flow feature
-  //TODO: Need a flag for using DataFlowMap?
   if (UseValueProfileMask) {
     DataFlowMap.ForEach([&](size_t Idx) {
       HandleFeature(static_cast<uint32_t>(FirstFeature + Idx));
