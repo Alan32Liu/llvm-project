@@ -640,6 +640,7 @@ ReadCorpora(const std::vector<std::string> &CorpusDirs,
 }
 
 int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
+  fuzzer::TPC.InitializeMainObjectInformation();
   using namespace fuzzer;
   assert(argc && argv && "Argument pointers cannot be nullptr");
   std::string Argv0((*argv)[0]);

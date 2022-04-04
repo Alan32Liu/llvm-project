@@ -27,6 +27,14 @@
 // Used by -fsanitize-coverage=stack-depth to track stack depth
 ATTRIBUTES_INTERFACE_TLS_INITIAL_EXEC uintptr_t __sancov_lowest_stack;
 
+// The variables below are computed by dl_iterate_phdr_callback.
+// Main object is the executable binary containing main()
+// and most of the executable code (we assume that the target is
+// built in mostly-static mode, i.e. -dynamic_mode=off).
+const uintptr_t kInvalidStartAddress = -1;
+uintptr_t main_object_start_address = kInvalidStartAddress;
+uintptr_t main_object_size = 0;
+
 namespace fuzzer {
 
 TracePC TPC;
@@ -392,6 +400,13 @@ void TracePC::HandleCmp(uintptr_t PC, T Arg1, T Arg2) {
   ValueProfileMap.AddValue(PC * 128 + 64 + AbsoluteDistance);
 }
 
+ATTRIBUTE_TARGET_POPCNT ALWAYS_INLINE
+ATTRIBUTE_NO_SANITIZE_ALL
+void TracePC::HandleDf(uintptr_t PC, uintptr_t Addr, uintptr_t MaxPC) {
+  uintptr_t feature = PC * MaxPC + Addr;
+  DataFlowMap.AddValue(feature);
+}
+
 ATTRIBUTE_NO_SANITIZE_MEMORY
 static size_t InternalStrnlen(const char *S, size_t MaxLen) {
   size_t Len = 0;
@@ -616,6 +631,48 @@ void __sanitizer_cov_trace_gep(uintptr_t Idx) {
   fuzzer::TPC.HandleCmp(PC, Idx, (uintptr_t)0);
 }
 
+ATTRIBUTE_INTERFACE
+ATTRIBUTE_NO_SANITIZE_MEMORY
+ATTRIBUTE_TARGET_POPCNT
+void TraceLoad(void *Addr) {
+  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  uintptr_t LoadAddr = reinterpret_cast<uintptr_t>(Addr);
+
+  uintptr_t PCOffset = PC - main_object_start_address;
+  uintptr_t LoadOffset = LoadAddr - main_object_start_address;
+
+  if (PCOffset >= main_object_size) return;
+  if (LoadOffset >= main_object_size) return;
+  fuzzer::TPC.HandleDf(PCOffset, LoadOffset, main_object_size);
+}
+
+void __sanitizer_cov_load1(uint8_t *addr) { TraceLoad(addr); }
+void __sanitizer_cov_load2(uint16_t *addr) { TraceLoad(addr); }
+void __sanitizer_cov_load4(uint32_t *addr) { TraceLoad(addr); }
+void __sanitizer_cov_load8(uint64_t *addr) { TraceLoad(addr); }
+void __sanitizer_cov_load16(__uint128_t *addr) { TraceLoad(addr); }
+
+ATTRIBUTE_INTERFACE
+ATTRIBUTE_NO_SANITIZE_MEMORY
+ATTRIBUTE_TARGET_POPCNT
+void TraceStore(void *Addr) {
+  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  uintptr_t StoreAddr = reinterpret_cast<uintptr_t>(Addr);
+  uintptr_t PCOffset = PC - main_object_start_address;
+  uintptr_t StoreOffset = StoreAddr - main_object_start_address;
+
+  if (PCOffset >= main_object_size) return;
+  if (StoreOffset >= main_object_size) return;
+
+  fuzzer::TPC.HandleDf(PCOffset, StoreOffset, main_object_size);
+}
+
+void __sanitizer_cov_store1(uint8_t *addr) { TraceStore(addr); }
+void __sanitizer_cov_store2(uint16_t *addr) { TraceStore(addr); }
+void __sanitizer_cov_store4(uint32_t *addr) { TraceStore(addr); }
+void __sanitizer_cov_store8(uint64_t *addr) { TraceStore(addr); }
+void __sanitizer_cov_store16(__uint128_t *addr) { TraceStore(addr); }
+
 ATTRIBUTE_INTERFACE ATTRIBUTE_NO_SANITIZE_MEMORY
 void __sanitizer_weak_hook_memcmp(void *caller_pc, const void *s1,
                                   const void *s2, size_t n, int result) {
@@ -681,5 +738,23 @@ void __sanitizer_weak_hook_memmem(void *called_pc, const void *s1, size_t len1,
                                   const void *s2, size_t len2, void *result) {
   if (!fuzzer::RunningUserCallback) return;
   fuzzer::TPC.MMT.Add(reinterpret_cast<const uint8_t *>(s2), len2);
+}
+
+// See man dl_iterate_phdr.
+// Sets main_object_start_address and main_object_size.
+// The code assumes that the main binary is the the first one to be iterated on.
+int dl_iterate_phdr_callback(struct dl_phdr_info *info, size_t size,
+                                    void *data) {
+  main_object_start_address = info->dlpi_addr;
+  for (int j = 0; j < info->dlpi_phnum; j++) {
+    uintptr_t end_offset =
+        info->dlpi_phdr[j].p_vaddr + info->dlpi_phdr[j].p_memsz;
+    if (main_object_size < end_offset) main_object_size = end_offset;
+  }
+  return 1;  // we need only the first header, so return 1.
+}
+
+void fuzzer::TracePC::InitializeMainObjectInformation() {
+  dl_iterate_phdr(dl_iterate_phdr_callback, nullptr);
 }
 }  // extern "C"
