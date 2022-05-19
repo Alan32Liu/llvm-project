@@ -295,12 +295,10 @@ TracePC::CollectFeatures(Callback HandleFeature) const {
   }
 
   // Data Flow feature
-  if (UseValueProfileMask) {
-    DataFlowMap.ForEach([&](size_t Idx) {
-      HandleFeature(static_cast<uint32_t>(FirstFeature + Idx));
-    });
-    FirstFeature += DataFlowMap.SizeInBits();
-  }
+  DataFlowMap.ForEach([&](size_t Idx) {
+    HandleFeature(static_cast<uint32_t>(FirstFeature + Idx));
+  });
+  FirstFeature += DataFlowMap.SizeInBits();
 
   return FirstFeature;
 }
